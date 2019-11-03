@@ -18,6 +18,15 @@
     right: 0;
 }
 
+#pedalboard-dashboard.dev_api:after {
+    content: "DEV API enabled";
+    color: #555;
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    font-size: 50px;
+}
+
 #zoom-controllers {
     position:absolute;
     right:0px;
@@ -708,6 +717,7 @@ svg .connecting-light { fill: none; stroke: #6FF; stroke-width: 1; z-index: 1000
     text-transform:uppercase;
 }
 
+
 .save-popup .actions {
     border-color:#ddd;
     border-style:solid;
@@ -717,7 +727,7 @@ svg .connecting-light { fill: none; stroke: #6FF; stroke-width: 1; z-index: 1000
     text-align:right;
 }
 
-.save-popup label {
+.save-popup:not(#midi-ports-window) label {
     display:inline-block;
     float:left;
     line-height:2;
@@ -851,7 +861,7 @@ svg .connecting-light { fill: none; stroke: #6FF; stroke-width: 1; z-index: 1000
 	width: 100%;
 }
 
-#share-window label {
+.save-popup#share-window label {
 	width: 585px;
 }
 

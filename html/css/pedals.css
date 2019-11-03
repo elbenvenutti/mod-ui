@@ -7,7 +7,7 @@
 */
     z-index:100;
 }
-#pedalboard-dashboard > .mod-pedal > div:first-child {
+#pedalboard-dashboard > .mod-pedal > div:first-child:not(.mod-no-shadow) {
     box-shadow:  2px  8px  7px rgba(0,0,0,0.2),
                  4px 16px  7px rgba(0,0,0,0.2),
                  6px 24px  7px rgba(0,0,0,0.2),
@@ -38,7 +38,7 @@
     transition: color 0.33s;
 }
 .mod-settings:after {
-    content: '\e800';
+    content: '\e802';
 }
 .mod-pedal .mod-actions .mod-settings:hover { color: #eee;}
 .mod-pedal .mod-actions .mod-remove {
@@ -51,7 +51,7 @@
     transition: color 0.33s;
 }
 .mod-remove:after {
-    content: '\e801';
+    content: '\e803';
 }
 .mod-pedal .mod-actions .mod-remove:hover { color: #eee; }
 .mod-pedal .mod-actions .mod-information {
@@ -64,7 +64,7 @@
     transition: color 0.33s;
 }
 .mod-information:after {
-    content: '\e802';
+    content: '\e808';
 }
 .mod-pedal .mod-actions .mod-information:hover { color: #eee; }
 
@@ -568,6 +568,27 @@ body > .mod-settings.mod-window-visible {
     width:100px;
 }
 
+.mod-pedal-settings #mod-switch-transport-play .mod-switch-image {
+  width: 50px;
+  height: 50px;
+  background-size: auto 50px;
+}
+
+.mod-pedal-settings #mod-switch-transport-play .mod-switch-image.stop.off,
+.mod-pedal-settings #mod-switch-transport-play .mod-switch-image.play.on {
+  background-color: #883996;
+}
+
+.mod-pedal-settings #mod-switch-transport-play .mod-switch-image.stop {
+  background-image:url(../img/icons/stop.png);
+  left: 30px;
+}
+
+.mod-pedal-settings #mod-switch-transport-play .mod-switch-image.play {
+  background-image:url(../img/icons/transport.png);
+  left: 80px;
+}
+
 .mod-pedal-settings .mod-switch .mod-footswitch-image {
     background-image:url(../img/footswitch.png);
     background-position:left center;
@@ -656,11 +677,14 @@ body > .mod-settings.mod-window-visible {
 .mod-pedal-settings-address .mod-box {
     background:white;
     left:50%;
-    margin:-150px -168px;
+    margin:-150px -193px;
     padding:18px;
     position:absolute;
-    top:50%;
-    width:300px;
+    top:40%;
+    width:450px;
+    max-height: 70%;
+    overflow-y: auto;
+    overflow-x: hidden;
 }
 
 .mod-pedal-settings-address h1 {
@@ -706,22 +730,4 @@ body > .mod-settings.mod-window-visible {
 
 .mod-pedal-settings-address select {
     width:202px;
-}
-.label-toggle {
-    font-weight: 400;
-    text-transform: uppercase;
-    font-size: 0.8em;
-    cursor: pointer;
-    text-decoration: underline;
-    width: 100%
-}
-.checkbox-toggle {
-    position: absolute;
-    z-index: -999999
-}
-.checkbox-toggle ~ div {
-    display: none;
-}
-input[type=checkbox]:checked ~ div {
-   display: block
 }

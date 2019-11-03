@@ -11,10 +11,7 @@ JqueryClass('bankBox', {
             searchBox: self.find('input[type=search]'),
             resultCanvas: self.find('#bank-pedalboards-result .js-canvas'),
             resultCanvasMode: self.find('#bank-pedalboards-result .js-mode'),
-            bankAddressing: self.find('#bank-addressings'),
-            bankNavigateFootswitches: self.find("#js-navigate-footswitches"),
-            bankNavigateMIDI: self.find("#js-navigate-midi"),
-            bankNavigateChannel: self.find("#js-navigate-midi-channel"),
+            bankTitle: self.find('#bank-title'),
             saving: $('#banks-saving'),
             previousBankTitle: null,
             list: function (callback) {
@@ -35,8 +32,9 @@ JqueryClass('bankBox', {
 
         self.data(options)
 
-        options.pedalboardCanvasMode.pedalboardsModeSelector(options.pedalboardCanvas)
-        options.resultCanvasMode.pedalboardsModeSelector(options.resultCanvas)
+        // Not used anymore
+        // options.pedalboardCanvasMode.pedalboardsModeSelector(options.pedalboardCanvas)
+        // options.resultCanvasMode.pedalboardsModeSelector(options.resultCanvas)
 
         options.pedalboardCanvas.hide()
         options.pedalboardCanvasMode.hide()
@@ -47,33 +45,8 @@ JqueryClass('bankBox', {
             self.bankBox('create')
         })
 
-        options.bankNavigateFootswitches.change(function () {
-            var current = self.data('currentBank')
-            if (current) {
-                current.data('navigateFootswitches', $(this).is(':checked'))
-                self.bankBox('save')
-            }
-            options.bankNavigateChannel.addClass("disabled")
-        })
-        options.bankNavigateMIDI.change(function () {
-            var current = self.data('currentBank')
-            if (current) {
-                current.data('navigateFootswitches', !$(this).is(':checked'))
-                self.bankBox('save')
-            }
-            options.bankNavigateChannel.removeClass("disabled")
-        })
-        options.bankNavigateChannel.change(function () {
-            var current = self.data('currentBank')
-            if (current) {
-                current.data('navigateChannel', $(this).val())
-                self.bankBox('save')
-            }
-        })
-
         var searcher = new PedalboardSearcher($.extend({
             searchbox: options.searchBox,
-            //searchbutton: self.find('button.search'),
             mode: 'installed',
             skipBroken: true,
             render: function (pedalboard, url) {
@@ -129,8 +102,6 @@ JqueryClass('bankBox', {
             },
         })
 
-        //$('ul, li').disableSelection()
-
         options.bankCanvas.sortable({
             handle: '.move',
             update: function () {
@@ -143,22 +114,6 @@ JqueryClass('bankBox', {
             self.bankBox('load')
             return false
         }
-
-        /*
-        var addressFactory = function (i) {
-            return function () {
-                var current = self.data('currentBank')
-                if (!current)
-                    return
-                var value = parseInt($(this).val())
-                current.data('addressing')[i] = value
-                self.bankBox('save')
-            }
-        }
-        for (i = 0; i < 4; i++) {
-            self.find('select[name=foot-' + i + ']').change(addressFactory(i))
-        }
-        */
 
         self.window(options)
     },
@@ -174,7 +129,7 @@ JqueryClass('bankBox', {
             self.data('searchForm').hide()
             self.data('resultCanvas').hide()
             self.data('resultCanvasMode').hide()
-            self.data('bankAddressing').hide()
+            self.data('bankTitle').hide()
         } else {
             self.data('loaded', true)
         }
@@ -187,9 +142,6 @@ JqueryClass('bankBox', {
                 self.data('previousBankTitle', null)
 
                 for (var i = 0; i < banks.length; i++) {
-                    if (banks[i].navigateChannel == null) {
-                        banks[i].navigateChannel = 16
-                    }
                     bank = self.bankBox('renderBank', banks[i], i)
                     if (previousBankTitle == banks[i].title) {
                         self.bankBox('selectBank', bank)
@@ -221,8 +173,6 @@ JqueryClass('bankBox', {
             serialized.push({
                 title: bank.find('.js-bank-title').text(),
                 pedalboards: pedalboardData,
-                navigateFootswitches: bank.data('navigateFootswitches'),
-                navigateChannel: bank.data('navigateChannel'),
             })
         });
         self.data('saving').html('Auto saving banks...').show()
@@ -257,8 +207,6 @@ JqueryClass('bankBox', {
         var bankData = {
             'title': '',
             'pedalboards': [],
-            'navigateFootswitches': false,
-            'navigateChannel': 16,
         }
         var bank = self.bankBox('renderBank', bankData)
         self.bankBox('editBank', bank)
@@ -271,8 +219,6 @@ JqueryClass('bankBox', {
         self.data('bankCanvas').append(bank)
         bank.data('selected', false)
         bank.data('pedalboards', $('<div>'))
-        bank.data('navigateFootswitches', bankData.navigateFootswitches)
-        bank.data('navigateChannel', bankData.navigateChannel)
         bank.data('title', bankData.title)
 
         var i, pedalboardData, rendered
@@ -322,12 +268,6 @@ JqueryClass('bankBox', {
 
         canvas.append(bank.data('pedalboards').children())
 
-        /*
-        var addressing = bank.data('addressing')
-        for (i = 0; i < 4; i++)
-            self.find('select[name=foot-' + i + ']').val(addressing[i])
-        */
-
         // Show everything
         canvas.show()
         self.data('pedalboardCanvasMode').show()
@@ -342,14 +282,9 @@ JqueryClass('bankBox', {
         self.data('bankCanvas').children().removeClass('selected')
         bank.addClass('selected')
 
-        var channel = bank.data('navigateChannel'),
-            navigFoots = bank.data('navigateFootswitches');
-
-        self.data('bankNavigateFootswitches').prop("checked", navigFoots)
-        self.data('bankNavigateMIDI').prop("checked", !navigFoots)
-        self.data('bankNavigateChannel').attr("value", channel).val(channel).value = channel
-        self.data('bankAddressing').find('h1').text(bank.data('title') || "Untitled")
-        self.data('bankAddressing').show()
+	// Replace the title string
+        self.data('bankTitle').find('h1').text(bank.data('title') || "Untitled")
+        self.data('bankTitle').show()
     },
 
     editBank: function (bank) {
@@ -369,12 +304,9 @@ JqueryClass('bankBox', {
             titleBox.data('editing', false)
             titleBox.html(title)
             bank.data('title', title)
-            self.data('bankAddressing').find('h1').text(title)
+            self.data('bankTitle').find('h1').text(title)
             self.data('previousBankTitle', title)
             self.bankBox('save')
-            /*
-            self.data('currentBank').data('title', title)
-            */
         }
         editBox.keydown(function (e) {
             if (e.keyCode == 13) {
@@ -402,7 +334,7 @@ JqueryClass('bankBox', {
             self.data('searchForm').hide()
             self.data('resultCanvas').hide()
             self.data('resultCanvasMode').hide()
-            self.data('bankAddressing').hide()
+            self.data('bankTitle').hide()
         }
         bank.animate({
             opacity: 0,
@@ -440,11 +372,11 @@ JqueryClass('bankBox', {
 
         rendered.data('pedalboardBundle', pedalboard.bundle)
 
-        wait_for_pedalboard_screenshot(pedalboard.bundle, function (resp) {
+        wait_for_pedalboard_screenshot(pedalboard.bundle, pedalboard.version, function (resp) {
             var img = rendered.find('.img img');
 
             if (resp.ok) {
-                img.attr("src", "/pedalboard/image/thumbnail.png?bundlepath="+escape(pedalboard.bundle)+"&tstamp="+resp.ctime)
+                img.attr("src", "/pedalboard/image/thumbnail.png?bundlepath="+escape(pedalboard.bundle)+"&tstamp="+resp.ctime+"&v="+pedalboard.version)
                 img.css({ top: (img.parent().height() - img.height()) / 2 })
             } else {
                 img.attr("src", "/img/icons/broken_image.svg")

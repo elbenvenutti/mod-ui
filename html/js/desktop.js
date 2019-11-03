@@ -70,6 +70,7 @@ function Desktop(elements) {
         bypassRightButton: $('<div>'),
         bufferSizeButton: $('<div>'),
         xrunsButton: $('<div>'),
+        cpuStatsButton: $('<div>'),
     }, elements)
 
     this.installationQueue = new InstallationQueue()
@@ -163,12 +164,16 @@ function Desktop(elements) {
                 dataType: 'json'
             })
         },
-        setEnabled: function (instance, portSymbol, enabled) {
+        setEnabled: function (instance, portSymbol, enabled, feedback, forceAddress) {
+            if (!enabled && feedback === undefined) {
+                console.warn("ERROR setEnabled called as false, but with undefined feedback")
+                feedback = true
+            }
             if (instance == "/pedalboard") {
-                self.transportControls.setControlEnabled(portSymbol, enabled)
+                self.transportControls.setControlEnabled(portSymbol, enabled, feedback, forceAddress)
                 return
             }
-            self.pedalboard.pedalboard('setPortEnabled', instance, portSymbol, enabled)
+            self.pedalboard.pedalboard('setPortEnabled', instance, portSymbol, enabled, feedback, forceAddress)
         },
         renderForm: function (instance, port) {
             var label
@@ -192,10 +197,10 @@ function Desktop(elements) {
                 name: port.shortName
             }
             return Mustache.render(TEMPLATES.addressing, context)
-        }
+        },
     })
 
-    this.pedalPresets = new PedalboardPresetsManager({
+    this.pedalPresets = new SnapshotsManager({
         pedalPresetsWindow: elements.pedalPresetsWindow,
         pedalPresetsList: elements.pedalPresetsList,
         pedalPresetsOverlay: elements.pedalPresetsOverlay,
@@ -216,6 +221,7 @@ function Desktop(elements) {
     this.loadingPeldaboardForFirstTime = true
 
     this.pedalboard = self.makePedalboard(elements.pedalboard, elements.effectBox)
+
     elements.zoomIn.click(function () {
         self.pedalboard.pedalboard('zoomIn')
     })
@@ -242,6 +248,26 @@ function Desktop(elements) {
     })
 
     this.titleBox = elements.titleBox
+
+    this.ParameterSet = function (paramchange){
+        $.ajax({
+            url: '/effect/parameter/set/' ,
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify(paramchange),
+            success: function (resp) {
+                if (!resp) {
+                    new Bug("Couldn't address parameter, not allowed")
+                }
+            },
+            error: function () {
+                new Bug ("Couldn't address parameter, server error")
+            },
+            cache: false,
+            global: false,
+            dataType: 'json'
+        })
+    }
 
     this.cloudPluginListFunction = function (callback) {
         $.ajax({
@@ -501,7 +527,38 @@ function Desktop(elements) {
         openAddressingDialog: function (port, label) {
             self.hardwareManager.open("/pedalboard", port, label)
         },
-        unaddressPort: function (portSymbol, callback) {
+        setNewBeatsPerMinuteValue: function (bpm) {
+          self.hardwareManager.setBeatsPerMinuteValue(bpm)
+        },
+        removeBPMHardwareMapping: function(syncMode) {
+          var instanceAndSymbol = "/pedalboard/:bpm"
+          if (self.hardwareManager.removeHardwareMappping(instanceAndSymbol)) {
+              var source = syncMode === "link" ? "Ableton Link" : "MIDI"
+              new Notification('info', 'BPM addressing removed, incompatible with ' + source + ' sync mode', 8000)
+          }
+          self.pedalboardModified = true
+        },
+        setSyncMode: function(syncMode, callback) {
+          $.ajax({
+              url: '/pedalboard/transport/set_sync_mode/' + syncMode,
+              type: 'POST',
+              success: function (resp) {
+                  if (resp) {
+                      callback(true)
+                  } else {
+                      new Bug("Couldn't set new sync mode")
+                      callback(false)
+                  }
+              },
+              error: function () {
+                  new Bug("Couldn't set new sync mode, server error")
+                  callback(false)
+              },
+              cache: false,
+              dataType: 'json'
+          })
+        },
+        unaddressPort: function (portSymbol, syncMode, callback) {
             var addressing = {
                 uri    : kNullAddressURI,
                 label  : "",
@@ -519,7 +576,8 @@ function Desktop(elements) {
                 success: function (resp) {
                     if (resp) {
                         if (self.hardwareManager.removeHardwareMappping(instanceAndSymbol)) {
-                            new Notification('info', 'BPM addressing removed, incompatible with Link sync mode', 8000)
+                            var source = syncMode === "link" ? "Ableton Link" : "MIDI"
+                            new Notification('info', 'BPM addressing removed, incompatible with ' + source + ' sync mode', 8000)
                         }
                         self.pedalboardModified = true
                         callback(true)
@@ -628,7 +686,7 @@ function Desktop(elements) {
         })
     }
 
-    this.saveConfigValue = function (key, value) {
+    this.saveConfigValue = function (key, value, callback) {
         $.ajax({
             url: '/config/set',
             type: 'POST',
@@ -636,8 +694,16 @@ function Desktop(elements) {
                 key  : key,
                 value: value,
             },
-            success: function () {},
-            error: function () {},
+            success: function () {
+              if (callback) {
+                callback(true)
+              }
+            },
+            error: function () {
+              if (callback) {
+                callback(false)
+              }
+            },
             cache: false,
             dataType: 'json'
         })
@@ -806,9 +872,12 @@ function Desktop(elements) {
     },
 
     this.waitForScreenshot = function (generate, callback) {
+        var bundlepath = self.pedalboardBundle
+        pending_pedalboard_screenshots.push(bundlepath)
+
         if (generate) {
             $.ajax({
-                url: "/pedalboard/image/generate?bundlepath="+escape(self.pedalboardBundle),
+                url: "/pedalboard/image/generate?bundlepath="+escape(bundlepath),
                 success: function (resp) {
                     callback(resp.ok)
                 },
@@ -820,7 +889,7 @@ function Desktop(elements) {
             })
         } else {
             $.ajax({
-                url: "/pedalboard/image/wait?bundlepath="+escape(self.pedalboardBundle),
+                url: "/pedalboard/image/wait?bundlepath="+escape(bundlepath),
                 success: function (resp) {
                     callback(resp.ok)
                 },
@@ -892,10 +961,10 @@ function Desktop(elements) {
         })
     })
     elements.pedalboardPresetsEnabler.click(function () {
-        new Notification('info', 'Pedalboard presets have been activated', 8000)
+        new Notification('info', 'Pedalboard snapshots have been activated', 8000)
 
         $.ajax({
-            url: '/pedalpreset/enable',
+            url: '/snapshot/enable',
             method: 'POST',
             success: function () {
                 $('#js-preset-enabler').hide()
@@ -905,20 +974,20 @@ function Desktop(elements) {
                 self.pedalboardModified = true
             },
             error: function () {
-                new Bug("Failed to activate pedalboard presets")
+                new Bug("Failed to activate pedalboard snapshots")
             },
             cache: false,
         })
     })
     elements.presetDisableButton.click(function () {
-        if (!confirm("This action will delete all current pedalboard presets. Continue?")) {
+        if (!confirm("This action will delete all current pedalboard snapshots. Continue?")) {
             return
         }
 
         self.hardwareManager.removeHardwareMappping("/pedalboard/:presets")
 
         $.ajax({
-            url: '/pedalpreset/disable',
+            url: '/snapshot/disable',
             method: 'POST',
             success: function () {
                 self.pedalboardPresetId = -1
@@ -928,7 +997,7 @@ function Desktop(elements) {
                 $('#js-preset-enabler').show()
             },
             error: function () {
-                new Bug("Failed to disable pedalboard presets")
+                new Bug("Failed to disable pedalboard snapshots")
             },
             cache: false,
         })
@@ -939,14 +1008,14 @@ function Desktop(elements) {
         }
 
         $.ajax({
-            url: '/pedalpreset/save',
+            url: '/snapshot/save',
             method: 'POST',
             success: function () {
                 self.pedalboardModified = true
-                new Notification('info', 'Pedalboard preset saved', 2000)
+                new Notification('info', 'Pedalboard snapshot saved', 2000)
             },
             error: function () {
-                new Bug("Failed to save pedalboard preset")
+                new Bug("Failed to save pedalboard snapshot")
             },
             cache: false,
             dataType: 'json',
@@ -955,12 +1024,12 @@ function Desktop(elements) {
     elements.presetSaveAsButton.click(function () {
         var addressed = !!self.hardwareManager.addressingsByPortSymbol['/pedalboard/:presets']
         if (addressed) {
-            return new Notification("warn", "Cannot change presets while addressed to hardware", 3000)
+            return new Notification("warn", "Cannot change snapshot while addressed to hardware", 3000)
         }
 
         desktop.openPresetSaveWindow("", function (newName) {
             $.ajax({
-                url: '/pedalpreset/saveas',
+                url: '/snapshot/saveas',
                 data: {
                     title: newName,
                 },
@@ -971,10 +1040,10 @@ function Desktop(elements) {
                     self.pedalboardPresetId = resp.id
                     self.pedalboardModified = true
                     self.titleBox.text((self.title || 'Untitled') + " - " + newName)
-                    new Notification('info', 'Pedalboard preset saved', 2000)
+                    new Notification('info', 'Pedalboard snapshot saved', 2000)
                 },
                 error: function () {
-                    new Bug("Failed to save pedalboard preset")
+                    new Bug("Failed to save pedalboard snapshot")
                 },
                 cache: false,
                 dataType: 'json',
@@ -983,11 +1052,18 @@ function Desktop(elements) {
     })
     elements.presetManageButton.click(function () {
         if (self.pedalboardPresetId < 0) {
-            return new Notification('warn', 'Pedalboard presets are not enabled', 1500)
+            return new Notification('warn', 'Pedalboard snapshots are not enabled', 1500)
         }
 
         var addressed = !!self.hardwareManager.addressingsByPortSymbol['/pedalboard/:presets']
-        self.pedalPresets.start(self.pedalboardPresetId, addressed)
+        var feedback = true
+
+        if (addressed) {
+            console.log(self.hardwareManager.addressingsData['/pedalboard/:presets'])
+            feedback = self.hardwareManager.addressingsData['/pedalboard/:presets'].feedback
+        }
+
+        self.pedalPresets.start(self.pedalboardPresetId, addressed, feedback)
     })
 
     elements.bypassLeftButton.click(function () {
@@ -1032,6 +1108,21 @@ function Desktop(elements) {
                     $("#mod-xruns").text("0 Xruns")
                 }
             }
+        })
+    })
+    elements.cpuStatsButton.click(function () {
+        $.ajax({
+            url: '/switch_cpu_freq/',
+            method: 'POST',
+            cache: false,
+            success: function (ok) {
+                if (! ok) {
+                    new Bug("Couldn't set new cpu frequency")
+                }
+            },
+            error: function () {
+                new Bug("Communication failure")
+            },
         })
     })
 
@@ -1480,6 +1571,7 @@ Desktop.prototype.makePedalboardBox = function (el, trigger) {
         windowManager: this.windowManager,
         list: self.pedalboardListFunction,
         search: self.pedalboardSearchFunction,
+        saveConfigValue: self.saveConfigValue,
         remove: function (pedalboard, callback) {
             if (!confirm(sprintf('The pedalboard "%s" will be permanently removed! Confirm?', pedalboard.title)))
                 return
@@ -1725,6 +1817,16 @@ Desktop.prototype.saveCurrentPedalboard = function (asNew, callback) {
             self.pedalboardEmpty = false
             self.pedalboardModified = false
 
+            if (self.previousPedalboardList != null) {
+                for (var i=0; i<self.previousPedalboardList.length; i++) {
+                    var pedal = self.previousPedalboardList[i]
+                    if (pedal.bundle == self.pedalboardBundle) {
+                        pedal.version += 1
+                        break
+                    }
+                }
+            }
+
             new Notification("info", sprintf('Pedalboard "%s" saved', title), 2000)
 
             if (callback)
@@ -1856,7 +1958,14 @@ JqueryClass('statusTooltip', {
                     $(this).hide()
                 })
         })
-        tooltip.css('right', $(window).width() - self.position().left - self.width())
+
+        // Special case for bottom left mod-plugins icon
+        // arrow should be on the left, not on the right
+        if (self.attr('id') === "mod-plugins") {
+          var arrow = tooltip.data('arrow');
+          arrow.css('left', 14);
+        }
+
         return self
     },
 
@@ -1886,11 +1995,10 @@ JqueryClass('statusTooltip', {
         tooltip.show().stop().animate({
             opacity: 1
         }, 200)
-        if (tooltip.position().left < 0) {
-            var arrow = tooltip.data('arrow');
-            arrow.css('left', arrow.position().left + tooltip.position().left);
-            tooltip.css('right', $(window).width() - self.position().left - self.width() + tooltip.position().left);
-        }
+
+        // Adjust tooltip position in case window has been resized
+        self.statusTooltip('updatePosition')
+
         if (timeout) {
             setTimeout(function () {
                 tooltip.stop().animate({
@@ -1907,6 +2015,11 @@ JqueryClass('statusTooltip', {
         var self = $(this)
         var tooltip = self.data('tooltip')
         tooltip.css('right', $(window).width() - self.position().left - self.width())
+
+        // Special case for bottom left mod-plugins icon
+        if (self.attr('id') === "mod-plugins") {
+            tooltip.css('right', $(window).width() - self.position().left - self.width() + tooltip.position().left);
+        }
     }
 })
 
@@ -1920,12 +2033,16 @@ function enable_dev_mode(skipSaveConfig) {
 
     // adjust position
     $('#mod-devices').statusTooltip('updatePosition')
+    $('#mod-settings').statusTooltip('updatePosition')
 
     // xrun counter
     $('#mod-xruns').show()
 
     // buffer size button
     $('#mod-buffersize').show()
+
+    // CPU speed and temperature
+    $('#mod-cpu-stats').show()
 
     // transport parameters
     $('#mod-transport-window').css({
@@ -1951,12 +2068,16 @@ function disable_dev_mode() {
 
     // adjust position
     $('#mod-devices').statusTooltip('updatePosition')
+    $('#mod-settings').statusTooltip('updatePosition')
 
     // xrun counter
     $('#mod-xruns').hide()
 
     // buffer size button
     $('#mod-buffersize').hide()
+
+    // CPU speed and temperature
+    $('#mod-cpu-stats').hide()
 
     // transport parameters
     $('#mod-transport-window').css({

@@ -170,6 +170,8 @@ function refresh_sysprefs() {
             $("#prefs-service-mixserver").prop("checked", resp.service_mixserver)
             $("#prefs-service-mod-sdk").prop("checked", resp.service_mod_sdk)
             $("#prefs-service-netmanager").prop("checked", resp.service_netmanager)
+            $("#prefs-workarounds-autorestart-hmi").prop("checked", resp.autorestart_hmi)
+            $("#prefs-workarounds-disable-peakmeter").prop("checked", resp.disable_peakmeter)
         },
         cache: false,
         global: false,
@@ -292,11 +294,12 @@ function system_exechange(data, callback) {
     })
 }
 
-function enable_service(name, enable) {
+function enable_service(name, enable, inverted) {
     system_exechange({
-        'type'  : 'service',
-        'name'  : name,
-        'enable': enable ? 1 : 0,
+        'type'    : 'service',
+        'name'    : name,
+        'enable'  : enable ? 1 : 0,
+        'inverted': inverted ? 1 : 0,
     })
 }
 
@@ -451,16 +454,6 @@ $('document').ready(function() {
     refresh_sysinfo()
     refresh_sysprefs()
 
-    if (PREFERENCES['transport-rolling-at-boot'] == "true") {
-        $("#prefs-prefs-autostart-playback").prop("checked", true)
-    }
-    if (PREFERENCES['prefs-prefs-autostart-link'] == "true") {
-        $("#prefs-prefs-autostart-link").prop("checked", true)
-    }
-    if (PREFERENCES['tuner-mutes-outputs'] != "false") {
-        $("#prefs-prefs-muted-tuner").prop("checked", true)
-    }
-
     if (PREFERENCES['dev-mode'] == "on") {
         $("#prefs-ui-developer-mode").prop("checked", true)
     }
@@ -480,7 +473,7 @@ $('document').ready(function() {
         }
 
         var name
-        if ($("#prefs-bluetooth-name").prop("checked")) {
+        if ($("#prefs-bluetooth-custom").prop("checked")) {
             name = $("#prefs-bluetooth-name").val()
         } else {
             name = ""
@@ -535,21 +528,6 @@ $('document').ready(function() {
         self.last_bluetooth_timeout = setTimeout(function () {
             self.set_bluetooth_name()
         }, 400)
-    })
-
-    // ----------------------------------------------------------------------------------------------------------------
-    // --- Preferences
-
-    $("#prefs-prefs-autostart-playback").click(function () {
-        config_set("transport-rolling-at-boot", bool2str($(this).prop("checked")))
-    })
-
-    $("#prefs-prefs-autostart-link").click(function () {
-        config_set("link-enabled-at-boot", bool2str($(this).prop("checked")))
-    })
-
-    $("#prefs-prefs-muted-tuner").click(function () {
-        config_set("tuner-mutes-outputs", bool2str($(this).prop("checked")))
     })
 
     // ----------------------------------------------------------------------------------------------------------------
@@ -674,6 +652,17 @@ $('document').ready(function() {
     })
 
     // ----------------------------------------------------------------------------------------------------------------
+    // --- Workarounds
+
+    $("#prefs-workarounds-autorestart-hmi").click(function () {
+        create_or_delete_file("autorestart-hmi", $(this).prop("checked"), true)
+    })
+
+    $("#prefs-workarounds-disable-peakmeter").click(function () {
+        enable_service("mod-peakmeter", $(this).prop("checked"), true)
+    })
+
+    // ----------------------------------------------------------------------------------------------------------------
     // --- Device Updates
 
     var respDev, respVer
@@ -785,27 +774,6 @@ $('document').ready(function() {
                     </label>
                 </form>
 
-                <h1>Preferences</h1>
-                <form class="form">
-                    <label>
-                        <input type="checkbox" autocomplete="off" id="prefs-prefs-autostart-playback">
-                            Always start with playback/transport rolling
-                        </input>
-                    </label>
-                    <br/>
-                    <label>
-                        <input type="checkbox" autocomplete="off" id="prefs-prefs-autostart-link">
-                            Always start with Link support enabled
-                        </input>
-                    </label>
-                    <br/>
-                    <label>
-                        <input type="checkbox" autocomplete="off" id="prefs-prefs-muted-tuner">
-                            Mute audio outputs when Tuner is enabled
-                        </input>
-                    </label>
-                </form>
-
                 <h1>Backup &amp; Restore</h1>
                 <form class="form">
                     <p>
@@ -894,6 +862,7 @@ $('document').ready(function() {
                         With this enabled, the 2 outputs will receive the same data if one of them is unconnected.<br/>
                         Note that changing this option requires a reboot for changes to take effect.
                     </p>
+
                     <label>
                         <input type="checkbox" autocomplete="off" id="prefs-audio-256-frames">
                             Use 256 frames as Buffer Size
@@ -944,9 +913,32 @@ $('document').ready(function() {
                     </label>
                     <p>
                         Show option to list 'beta' plugins in the Plugin Store.<br/>
-                        Note that beta plugins can be unstable and cause crashes. If you share a pedalboard containing beta plugins, it will only
-						be available to users that explicitly accept pedalboards with beta plugins.<br/>
+                        Note that beta plugins can be unstable and cause crashes.
+                        If you share a pedalboard containing beta plugins, it will only be available to users that explicitly accept pedalboards with beta plugins.<br/>
                         Just remember: things can break!
+                    </p>
+                </form>
+
+                <h1>Workarounds</h1>
+                <form class="form">
+                    <label>
+                        <input type="checkbox" autocomplete="off" id="prefs-workarounds-autorestart-hmi">
+                            Automatically restart controller screen
+                        </input>
+                    </label>
+                    <p>
+                        If the controller displays locks up or stops working correctly, we can try to detect this and automatically trigger a restart.<br/>
+                        This is not completely safe though, false positives can happen and the controller screen might be restarted by mistake.<br/>
+                        A reboot is required in order for this option to take place.
+                    </p>
+                    <label>
+                        <input type="checkbox" autocomplete="off" id="prefs-workarounds-disable-peakmeter">
+                            Disable audio peak meters
+                        </input>
+                    </label>
+                    <p>
+                        If you are experiencing issues because of the peak meters, you can disable them here.<br/>
+                        This is a temporary countermeasure against issues in a few Duo X units.
                     </p>
                 </form>
             </div>

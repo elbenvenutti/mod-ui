@@ -42,9 +42,10 @@ function loadDependencies(gui, effect, callback) { //source, effect, bundle, cal
     var settingsLoaded = true
     var cssLoaded = true
     var jsLoaded = true
+    var nonCachedInfoLoaded = true
 
     var cb = function () {
-        if (iconLoaded && settingsLoaded && cssLoaded && jsLoaded) {
+        if (iconLoaded && settingsLoaded && cssLoaded && jsLoaded && nonCachedInfoLoaded) {
             setTimeout(callback, 0)
         }
     }
@@ -58,6 +59,28 @@ function loadDependencies(gui, effect, callback) { //source, effect, bundle, cal
     var version    = [effect.builder, effect.microVersion, effect.minorVersion, effect.release].join('_')
     var escapeduri = escape(effect.uri)
     var plughash   = escapeduri + version
+
+    if (! isSDK) {
+        nonCachedInfoLoaded = false
+        $.ajax({
+            url: '/effect/get_non_cached',
+            data: {
+                uri: effect.uri
+            },
+            success: function (data) {
+                effect.licensed = data.licensed
+                effect.presets = data.presets
+                nonCachedInfoLoaded = true
+                cb()
+            },
+            error: function () {
+                nonCachedInfoLoaded = true
+                cb()
+            },
+            cache: false,
+            dataType: 'json'
+        })
+    }
 
     if (effect.gui.iconTemplate) {
         if (loadedIcons[plughash]) {
@@ -306,6 +329,10 @@ function GUI(effect, options) {
 
         // let the host know about this change
         options.change(mod_port, value)
+
+        // let the HMI know about this change
+        paramchange = (self.instance + '/' + symbol + '/' + value)
+        desktop.ParameterSet(paramchange)
     }
 
     this.setPortWidgetsValue = function (symbol, value, source, only_gui) {
@@ -396,6 +423,26 @@ function GUI(effect, options) {
         }
     }
 
+    this.addressPort = function (symbol, feedback) {
+      var port = self.controls[symbol]
+      if (symbol !== ":presets") {
+        // add "addressed" class to all related widgets
+        if (symbol == ":bypass") {
+          self.settings.find('.mod-address[mod-role="bypass-address"]').addClass('addressed')
+        } else {
+          self.settings.find('.mod-address[mod-port-symbol="'+symbol+'"]').addClass('addressed')
+        }
+        // allow feedback when interacting with widget
+        if (feedback) {
+          for (var i in port.widgets) {
+              port.widgets[i].controlWidget('address')
+          }
+        }
+      } else {
+        self.settings.find('[mod-role=presets-address]').addClass('addressed')
+      }
+    }
+
     this.disable = function (symbol) {
         var port = self.controls[symbol]
         port.enabled = false
@@ -431,8 +478,14 @@ function GUI(effect, options) {
         if (symbol == ":presets") {
             self.icon.find('[mod-role=presets]').controlWidget('enable')
             self.settings.find('.mod-presets').data('enabled', true)
+            self.settings.find('[mod-role=presets-address]').removeClass('addressed')
             self.selectPreset(self.currentPreset)
         } else {
+            if (symbol == ":bypass") {
+              self.settings.find('.mod-address[mod-role="bypass-address"]').removeClass('addressed')
+            } else {
+              self.settings.find('.mod-address[mod-port-symbol="'+symbol+'"]').removeClass('addressed')
+            }
             // enable all related widgets
             for (var i in port.widgets) {
                 port.widgets[i].controlWidget('enable')
@@ -1275,7 +1328,10 @@ var baseWidget = {
         $(this).addClass('disabled').data('enabled', false)
     },
     enable: function () {
-        $(this).removeClass('disabled').data('enabled', true)
+        $(this).removeClass('addressed').removeClass('disabled').data('enabled', true)
+    },
+    address: function () {
+        $(this).data('enabled', true)
     },
 
     valueFromSteps: function (steps) {
@@ -1667,18 +1723,6 @@ JqueryClass('selectWidget', baseWidget, {
             self.trigger('valuechange', parseFloat(self.val()))
         })
         return self
-    },
-
-    disable: function () {
-        var self = $(this)
-        self.attr('disabled', true)
-        self.data('enabled', false)
-    },
-
-    enable: function () {
-        var self = $(this)
-        self.attr('disabled', false)
-        self.data('enabled', true)
     },
 
     setValue: function (value, only_gui) {

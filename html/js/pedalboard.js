@@ -472,12 +472,20 @@ JqueryClass('pedalboard', {
                     self.pedalboard('addHardwareInput', hw, '/graph/cv_playback_' + i + '_out', 'cv')
                 }
                 if (data.hardware.serial_midi_in) {
-                    var hw = $('<div class="hardware-output" mod-port-index="1" title="Hardware Serial MIDI In">')
+                    var hw = $('<div class="hardware-output" mod-port-index="1" title="Hardware DIN MIDI In">')
                     self.pedalboard('addHardwareOutput', hw, '/graph/serial_midi_in', 'midi')
                 }
                 if (data.hardware.serial_midi_out) {
-                    var hw = $('<div class="hardware-input" mod-port-index="1" title="Hardware Serial MIDI Out">')
+                    var hw = $('<div class="hardware-input" mod-port-index="1" title="Hardware DIN MIDI Out">')
                     self.pedalboard('addHardwareInput', hw, '/graph/serial_midi_out', 'midi')
+                }
+                if (data.hardware.midi_merger_in) {
+                    var hw = $('<div class="hardware-output" mod-port-index="2" title="All MIDI In">')
+                    self.pedalboard('addHardwareOutput', hw, '/graph/midi_merger_in', 'midi')
+                }
+                if (data.hardware.midi_merger_out) {
+                    var hw = $('<div class="hardware-input" mod-port-index="2" title="All MIDI Out">')
+                    self.pedalboard('addHardwareInput', hw, '/graph/midi_merger_out', 'midi')
                 }
                 var portdata, pindex
                 for (var i in data.hardware.midi_ins) {
@@ -657,7 +665,7 @@ JqueryClass('pedalboard', {
                             dummy.append(children);
                         })
                     },
-                    cache: false,
+                    cache: true,
                     dataType: 'json'
                 })
                 $('body').append(dummy)
@@ -979,7 +987,7 @@ JqueryClass('pedalboard', {
         var viewHeight = self.parent().height()
         var newScale = viewWidth / w
 
-        self.data('minScale', Math.min(self.data('minScale'), newScale))
+        self.data('minScale', newScale)
 
         self.animate({
             scale: newScale,
@@ -1264,6 +1272,7 @@ JqueryClass('pedalboard', {
             defaultSettingsTemplate: DEFAULT_SETTINGS_TEMPLATE
         }, guiOptions)
 
+        /* FIXME this is not used anywhere. remove?
         var preset_list = []
         for (var key in pluginData['presets']) {
             preset_list.push({
@@ -1274,7 +1283,9 @@ JqueryClass('pedalboard', {
         pluginData = $.extend({
             preset_list: preset_list
         }, pluginData)
+        */
         var pluginGui = new GUI(pluginData, options)
+
         pluginGui.render(instance, function (icon, settings) {
             obj.icon = icon
 
@@ -1417,7 +1428,7 @@ JqueryClass('pedalboard', {
         return Object.keys(uris)
     },
 
-    setPortEnabled: function (instance, symbol, enabled) {
+    setPortEnabled: function (instance, symbol, enabled, feedback, forceAddress) {
         var self = $(this)
         var targetname1, targetname2
         var callbackId  = instance+'/'+symbol+":enabled"
@@ -1432,10 +1443,13 @@ JqueryClass('pedalboard', {
         }
 
         if (gui && ($(targetname1).length || $(targetname2).length)) {
-            if (enabled) {
+            if (enabled || feedback) {
                 gui.enable(symbol)
             } else {
                 gui.disable(symbol)
+            }
+            if (forceAddress) {
+              gui.addressPort(symbol, feedback)
             }
 
         } else {
@@ -1445,10 +1459,14 @@ JqueryClass('pedalboard', {
                 $(document).unbindArrive(targetname2, cb)
 
                 var gui = self.pedalboard('getGui', instance)
-                if (enabled) {
+                if (enabled || feedback) {
                     gui.enable(symbol)
                 } else {
                     gui.disable(symbol)
+                }
+
+                if (forceAddress) {
+                  gui.addressPort(symbol, feedback)
                 }
             }
 

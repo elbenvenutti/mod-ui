@@ -18,17 +18,17 @@
 var ws
 var cached_cpuLoad = null,
     cached_xruns   = null,
-    timeout_xruns  = null
+    timeout_xruns  = null,
+    pb_loading     = true
 
 $('document').ready(function() {
     ws = new WebSocket("ws://" + window.location.host + "/websocket")
 
-    var loading  = false,
-        empty    = false,
+    var empty    = false,
         modified = false
 
     ws.onclose = function (evt) {
-        desktop.blockUI()
+        desktop && desktop.blockUI()
     }
 
     ws.onmessage = function (evt) {
@@ -76,10 +76,19 @@ $('document').ready(function() {
             return
         }
 
-        if (cmd == "mem_load") {
-            var value = parseFloat(data.substr(cmd.length+1))
-            $("#ram-bar").css("width", (100.0-value).toFixed().toString()+"%")
-            $("#ram-bar-text").text("RAM "+value.toString()+"%")
+        if (cmd == "sys_stats") {
+            data        = data.substr(cmd.length+1).split(" ",3)
+            var memload = parseFloat(data[0])
+            var cpufreq = data[1]
+            var cputemp = data[2]
+            $("#ram-bar").css("width", (100.0-memload).toFixed().toString()+"%")
+            $("#ram-bar-text").text("RAM "+memload.toString()+"%")
+
+            if (cpufreq !== "0" && cpufreq !== "0") {
+                $("#mod-cpu-stats").html(sprintf("%.1f GHz / %d &deg;C",
+                                                 parseInt(cpufreq)/1000000,
+                                                 parseInt(cputemp)/1000))
+            }
             return
         }
 
@@ -88,6 +97,7 @@ $('document').ready(function() {
             var instance = data[0]
             var symbol   = data[1]
             var value    = parseFloat(data[2])
+
             desktop.pedalboard.pedalboard("setPortWidgetsValue", instance, symbol, value);
             return
         }
@@ -135,7 +145,7 @@ $('document').ready(function() {
             var index = parseInt(data.substr(cmd.length+1))
 
             $.ajax({
-                url: '/pedalpreset/name',
+                url: '/snapshot/name',
                 type: 'GET',
                 data: {
                     id: index,
@@ -154,7 +164,7 @@ $('document').ready(function() {
         }
 
         if (cmd == "hw_map") {
-            data         = data.substr(cmd.length+1).split(" ",7)
+            data         = data.substr(cmd.length+1).split(" ", 12)
             var instance = data[0]
             var symbol   = data[1]
             var actuator = data[2]
@@ -162,7 +172,27 @@ $('document').ready(function() {
             var maximum  = parseFloat(data[4])
             var steps    = parseInt(data[5])
             var label    = data[6].replace(/_/g," ")
-            desktop.hardwareManager.addHardwareMapping(instance, symbol, actuator, label, minimum, maximum, steps)
+            var tempo    = data[7] === "True" ? true : false
+            var dividers = JSON.parse(data[8].replace(/'/g, '"'))
+            var page     = data[9]
+            if (page != null) {
+              page = parseInt(page)
+            }
+            var group = data[10]
+            var feedback = parseInt(data[11]) == 1
+
+            desktop.hardwareManager.addHardwareMapping(instance,
+                                                       symbol,
+                                                       actuator,
+                                                       label,
+                                                       minimum,
+                                                       maximum,
+                                                       steps,
+                                                       tempo,
+                                                       dividers,
+                                                       page,
+                                                       group,
+                                                       feedback)
             return
         }
 
@@ -195,7 +225,7 @@ $('document').ready(function() {
                 var targetport = '[mod-port="' + target.replace(/\//g, "\\/") + '"]'
 
                 var output       = $(sourceport)
-                var skipModified = loading
+                var skipModified = pb_loading
 
                 if (output.length) {
                     var input = $(targetport)
@@ -260,7 +290,7 @@ $('document').ready(function() {
             var y        = parseFloat(data[3])
             var bypassed = parseInt(data[4]) != 0
             var plugins  = desktop.pedalboard.data('plugins')
-            var skipModified = loading
+            var skipModified = pb_loading
 
             if (plugins[instance] == null) {
                 plugins[instance] = {} // register plugin
@@ -282,7 +312,7 @@ $('document').ready(function() {
 
                         desktop.pedalboard.pedalboard("addPlugin", pluginData, instance, bypassed, x, y, {}, null, skipModified)
                     },
-                    cache: false,
+                    cache: true,
                     dataType: 'json'
                 })
             }
@@ -316,7 +346,7 @@ $('document').ready(function() {
                 desktop.pedalboard.pedalboard('addHardwareInput', el, instance, type)
             }
 
-            if (! loading) {
+            if (! pb_loading) {
                 desktop.pedalboard.pedalboard('positionHardwarePorts')
             }
             return
@@ -369,7 +399,7 @@ $('document').ready(function() {
             data     = data.substr(cmd.length+1).split(" ",2)
             empty    = parseInt(data[0]) != 0
             modified = parseInt(data[1]) != 0
-            loading  = true
+            pb_loading = true
             desktop.pedalboard.data('wait').start('Loading pedalboard...')
             return
         }
@@ -378,7 +408,7 @@ $('document').ready(function() {
             var presetId = parseInt(data.substr(cmd.length+1))
 
             $.ajax({
-                url: '/pedalpreset/name',
+                url: '/snapshot/name',
                 type: 'GET',
                 data: {
                     id: presetId,
@@ -398,7 +428,7 @@ $('document').ready(function() {
                         }
                     }
 
-                    loading = false
+                    pb_loading = false
                     desktop.init();
                 },
                 cache: false,

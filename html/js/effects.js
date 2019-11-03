@@ -253,6 +253,7 @@ JqueryClass('effectBox', {
         var categories = {
             'Favorites': 0,
             'All': 0,
+            'ControlVoltage': 0,
             'Delay': 0,
             'Distortion': 0,
             'Dynamics': 0,
@@ -266,6 +267,7 @@ JqueryClass('effectBox', {
             'Spectral': 0,
             'Utility': 0,
             'MaxGen': 0,
+            'Camomile': 0,
         }
         var category
         for (i in plugins) {
@@ -516,7 +518,7 @@ JqueryClass('effectBox', {
                     desktop.pluginIndexerData[plugin.uri] = plugin
                     showInfo()
                 },
-                cache: false,
+                cache: true,
                 dataType: 'json'
             })
         }
